@@ -56,7 +56,7 @@ jobs:
         run: docker compose -f docker-compose.yml build
 
       - name: Start Postgres & Redis (detached)
-        run: docker compose -f docker-compose.yml up -d postgres redis web
+        run: docker compose -f docker-compose.yml up -d postgres redis 
 
       - name: Wait for Postgres (SQL ping)
         run: |
@@ -68,13 +68,16 @@ jobs:
           done
           docker compose ps
 
+      - name: Start Postgres & Redis (detached)
+        run: docker compose -f docker-compose.yml up -d web
+
       - name: Run makemigrations
-        run:  docker exec -ti web python manage.py makemigrations
+        run:  docker exec -ti django_app python manage.py makemigrations
 
       - name: Run migrations
-        run:  docker exec -ti web python manage.py migrate
+        run:  docker exec -ti django_app python manage.py migrate
       - name: Run test
-        run:  docker exec -ti web python manage.py test
+        run:  docker exec -ti django_app python manage.py test
 
       - name: Tear down
         if: always()
