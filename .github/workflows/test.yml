@@ -56,7 +56,7 @@ jobs:
         run: docker compose -f docker-compose.yml build
 
       - name: Start Postgres & Redis (detached)
-        run: docker compose -f docker-compose.yml up -d postgres redis 
+        run: docker compose -f docker-compose.yml up -d
 
       - name: Wait for Postgres (SQL ping)
         run: docker compose ps
