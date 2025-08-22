@@ -1,0 +1,88 @@
+name: Django Tests (Docker Compose)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:  # allow manual runs from the Actions tab
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      DJANGO_SETTINGS_MODULE: restaurantApi.settings
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate CI .env (from Secrets)
+        run: |
+          cat > .env <<'EOF'
+          # Database
+          DB_NAME=${{ secrets.CI_DB_NAME }}
+          DB_USER=${{ secrets.CI_DB_USER }}
+          DB_PASSWORD=${{ secrets.CI_DB_PASSWORD }}
+          DB_HOST=postgres
+          DB_PORT=5432
+
+          # Django
+          DJANGO_SETTINGS_MODULE=restaurantApi.settings
+          SECRET_KEY=${{ secrets.CI_SECRET_KEY }}
+
+          # Email
+          EMAIL_HOST=smtp.gmail.com
+          EMAIL_PORT=587
+          EMAIL_HOST_USER=${{ secrets.CI_EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD=${{ secrets.CI_EMAIL_HOST_PASSWORD }}
+          EMAIL_USE_TLS=true
+          EMAIL_USE_SSL=false
+          DEFAULT_FROM_EMAIL=restaurant_api <${{ secrets.CI_EMAIL_HOST_USER }}>
+
+          # Redis
+          REDIS_URL=${{ secrets.CI_REDIS_URL || 'redis://redis:6379/1' }}
+          EOF
+          # Mask sensitive values in logs
+          sed -E 's/(DB_PASSWORD=|SECRET_KEY=|EMAIL_HOST_PASSWORD=).*/\1******/' .env
+
+      - name: Show Docker versions
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Build images
+        run: docker compose -f docker-compose.yml build
+
+      - name: Start Postgres & Redis (detached)
+        run: docker compose -f docker-compose.yml up -d postgres redis
+
+      - name: Wait for healthchecks (Postgres/Redis)
+        shell: bash
+        run: |
+          # Wait up to ~90s for both to be healthy
+          for i in {1..30}; do
+            H1=$(docker inspect -f '{{.State.Health.Status}}' postgres_db 2>/dev/null || echo "starting")
+            # Redis container name is auto-generated if not set; use compose ps to find it
+            REDIS_NAME=$(docker compose ps -q redis)
+            H2=$(docker inspect -f '{{.State.Health.Status}}' "$REDIS_NAME" 2>/dev/null || echo "starting")
+            echo "postgres: $H1 | redis: $H2"
+            if [[ "$H1" == "healthy" && "$H2" == "healthy" ]]; then
+              break
+            fi
+            sleep 3
+          done
+          docker compose ps
+
+      - name: Run migrations + tests inside web container
+        run: |
+          docker compose run --rm web bash -lc "
+            python --version &&
+            python manage.py migrate --noinput &&
+            python manage.py test
+          "
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
