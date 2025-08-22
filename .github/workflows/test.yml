@@ -39,6 +39,7 @@ jobs:
 
           # Redis
           REDIS_URL=${{ secrets.CI_REDIS_URL || 'redis://redis:6379/1' }}
+          EOF
 
       - name: Print .env (debug only!)
         run: |
@@ -54,15 +55,28 @@ jobs:
       - name: Build images
         run: docker compose -f docker-compose.yml build
 
-      - name: Start Postgres & Redis (detached)
-        run: docker compose -f docker-compose.yml up -d
-
       - name: Postgres logs (tail)
         if: failure()
         run: docker compose logs --tail=200 postgres
 
-      - name: Wait for Postgres (SQL ping)
-        run: docker compose ps
+      - name: Start DB + cache (detached)
+        run: docker compose -f docker-compose.yml up -d postgres redis
+      
+      - name: Postgres logs (tail)
+        if: failure()
+        run: docker compose logs --tail=200 postgres
+
+      - name: Wait for healthchecks
+        run: |
+          # Poll until postgres & redis are healthy (uses your compose healthchecks)
+          for i in {1..30}; do
+            unhealthy=$(docker compose ps --format json | jq -r '.[] | select(.Name | test("postgres|redis")) | select(.Health != "healthy") | .Name' | wc -l)
+            [ "$unhealthy" -eq 0 ] && break
+            echo "Waiting for services to be healthy... ($i/30)"
+            docker compose ps
+            sleep 3
+          done
+          docker compose ps
 
       - name: Run migrations + tests inside web container
         # Run against the same image/volume mapping as local dev
@@ -72,6 +86,7 @@ jobs:
             python manage.py migrate --noinput &&
             python manage.py test
           "
+
       - name: Tear down
         if: always()
         run: docker compose -f docker-compose.yml down -v
