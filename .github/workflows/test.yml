@@ -58,18 +58,11 @@ jobs:
       - name: Start Postgres & Redis (detached)
         run: docker compose -f docker-compose.yml up -d postgres redis
 
-      - name: Wait for healthchecks (Postgres/Redis)
-        shell: bash
+      - name: Wait for Postgres (SQL ping)
         run: |
-          # Wait up to ~90s for both to be healthy
-          for i in {1..30}; do
-            H1=$(docker inspect -f '{{.State.Health.Status}}' postgres_db 2>/dev/null || echo "starting")
-            # Redis container name is auto-generated if not set; use compose ps to find it
-            REDIS_NAME=$(docker compose ps -q redis)
-            H2=$(docker inspect -f '{{.State.Health.Status}}' "$REDIS_NAME" 2>/dev/null || echo "starting")
-            echo "postgres: $H1 | redis: $H2"
-            if [[ "$H1" == "healthy" && "$H2" == "healthy" ]]; then
-              break
+          for i in {1..40}; do
+            if docker compose exec -T postgres psql -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" -c "select 1" >/dev/null 2>&1; then
+              echo "Postgres is ready"; break
             fi
             sleep 3
           done
@@ -81,7 +74,7 @@ jobs:
 
       - name: Run migrations + tests inside web container
         run: |
-          docker compose run --rm django_app bash -lc "
+          docker compose run --rm web bash -lc "
             python --version &&
             python manage.py migrate --noinput &&
             python manage.py test
