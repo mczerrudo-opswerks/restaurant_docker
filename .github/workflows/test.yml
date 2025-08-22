@@ -56,12 +56,12 @@ jobs:
         run: docker compose -f docker-compose.yml build
 
       - name: Start Postgres & Redis (detached)
-        run: docker compose -f docker-compose.yml up -d postgres redis
+        run: docker compose -f docker-compose.yml up -d postgres redis web
 
       - name: Wait for Postgres (SQL ping)
         run: |
           for i in {1..40}; do
-            if docker compose exec -T postgres_db psql -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" -c "select 1" >/dev/null 2>&1; then
+            if docker compose exec -T postgres psql -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" -c "select 1" >/dev/null 2>&1; then
               echo "Postgres is ready"; break
             fi
             sleep 3
@@ -69,12 +69,12 @@ jobs:
           docker compose ps
 
       - name: Run makemigrations
-        run:  docker exec -ti django_app python manage.py makemigrations
+        run:  docker exec -ti web python manage.py makemigrations
 
       - name: Run migrations
-        run:  docker exec -ti django_app python manage.py migrate
+        run:  docker exec -ti web python manage.py migrate
       - name: Run test
-        run:  docker exec -ti django_app python manage.py test
+        run:  docker exec -ti web python manage.py test
 
       - name: Tear down
         if: always()
