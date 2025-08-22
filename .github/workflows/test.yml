@@ -58,6 +58,10 @@ jobs:
       - name: Start Postgres & Redis (detached)
         run: docker compose -f docker-compose.yml up -d
 
+      - name: Postgres logs (tail)
+        if: failure()
+        run: docker compose logs --tail=200 postgres
+
       - name: Wait for Postgres (SQL ping)
         run: docker compose ps
 
