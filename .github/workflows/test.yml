@@ -56,7 +56,7 @@ jobs:
         run: docker compose -f docker-compose.yml build
 
       - name: Start Postgres & Redis (detached)
-        run: docker compose -f docker-compose.yml up -d postgres_db redis
+        run: docker compose -f docker-compose.yml up -d postgres redis
 
       - name: Wait for healthchecks (Postgres/Redis)
         shell: bash
@@ -74,6 +74,10 @@ jobs:
             sleep 3
           done
           docker compose ps
+
+      - name: Postgres logs (last 200 lines)
+        if: failure()
+        run: docker compose logs --tail=200 postgres
 
       - name: Run migrations + tests inside web container
         run: |
