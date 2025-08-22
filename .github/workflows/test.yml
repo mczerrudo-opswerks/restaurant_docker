@@ -28,10 +28,6 @@ jobs:
           DB_HOST=postgres
           DB_PORT=5432
 
-          # Django
-          DJANGO_SETTINGS_MODULE=restaurantApi.settings
-          SECRET_KEY=${{ secrets.CI_SECRET_KEY }}
-
           # Email
           EMAIL_HOST=smtp.gmail.com
           EMAIL_PORT=587
@@ -43,9 +39,12 @@ jobs:
 
           # Redis
           REDIS_URL=${{ secrets.CI_REDIS_URL || 'redis://redis:6379/1' }}
-          EOF
-          # Mask sensitive values in logs
-          sed -E 's/(DB_PASSWORD=|SECRET_KEY=|EMAIL_HOST_PASSWORD=).*/\1******/' .env
+
+      - name: Print .env (debug only!)
+        run: |
+          echo "----- .env -----"
+          cat .env
+          echo "----------------"
 
       - name: Show Docker versions
         run: |
