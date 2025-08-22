@@ -61,24 +61,20 @@ jobs:
       - name: Wait for Postgres (SQL ping)
         run: |
           for i in {1..40}; do
-            if docker compose exec -T postgres psql -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" -c "select 1" >/dev/null 2>&1; then
+            if docker compose exec -T postgres_db psql -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" -c "select 1" >/dev/null 2>&1; then
               echo "Postgres is ready"; break
             fi
             sleep 3
           done
           docker compose ps
 
-      - name: Postgres logs (last 200 lines)
-        if: failure()
-        run: docker compose logs --tail=200 postgres
+      - name: Run makemigrations
+        run:  docker exec -ti django_app python manage.py makemigrations
 
-      - name: Run migrations + tests inside web container
-        run: |
-          docker compose run --rm web bash -lc "
-            python --version &&
-            python manage.py migrate --noinput &&
-            python manage.py test
-          "
+      - name: Run migrations
+        run:  docker exec -ti django_app python manage.py migrate
+      - name: Run test
+        run:  docker exec -ti django_app python manage.py test
 
       - name: Tear down
         if: always()
